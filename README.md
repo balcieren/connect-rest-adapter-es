@@ -62,7 +62,7 @@ npx connect-rest-adapter --local ./proto --out ./src/generated
 # buf.gen.yaml
 version: v2
 plugins:
-  - local: ["npx", "connect-rest-adapter"]
+  - local: protoc-gen-connect-rest-adapter-es
     out: gen
 inputs:
   - directory: proto

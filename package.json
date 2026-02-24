@@ -1,13 +1,13 @@
 {
   "name": "connect-rest-adapter",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Buf plugin that generates a REST adapter for Connect-RPC clients, rewriting URLs using google.api.http annotations",
   "author": "Eren Balci",
   "license": "MIT",
   "main": "dist/main.js",
   "bin": {
-    "protoc-gen-connect-rest-adapter": "./dist/main.js",
-    "connect-rest-adapter": "./dist/main.js"
+    "protoc-gen-connect-rest-adapter-es": "dist/main.js",
+    "connect-rest-adapter": "dist/main.js"
   },
   "scripts": {
     "build": "tsc",
