@@ -10,19 +10,7 @@ import * as path from "node:path";
 import { generateRestAdapter } from "./generator";
 import { parseProtoFile } from "./parser";
 import type { ParsedService } from "./types";
-
-/**
- * Read all input from stdin
- */
-async function readStdin(): Promise<Buffer> {
-  const chunks: Buffer[] = [];
-
-  for await (const chunk of process.stdin) {
-    chunks.push(chunk);
-  }
-
-  return Buffer.concat(chunks);
-}
+import { restAdapterPlugin, runNodeJs } from "./plugin";
 
 /**
  * Process proto files from a directory (for local testing)
@@ -79,97 +67,82 @@ async function processLocalProtoFiles(
 }
 
 /**
- * Handle Buf plugin protocol
- * Reads CodeGeneratorRequest from stdin, writes CodeGeneratorResponse to stdout
+ * Handle the Buf plugin protocol.
+ *
+ * Reads a binary `CodeGeneratorRequest` from stdin and writes a binary
+ * `CodeGeneratorResponse` to stdout, mirroring what `buf generate` /
+ * `protoc` expect. The actual work is done by the plugin created via
+ * @bufbuild/protoplugin (see ./plugin.ts).
  */
-async function handleBufPlugin(): Promise<void> {
-  const input = await readStdin();
+function handleBufPlugin(): void {
+  runNodeJs(restAdapterPlugin);
+}
 
-  // For now, we'll parse a simple text-based protocol
-  // In a full implementation, this would use protobuf encoding
-  const inputStr = input.toString("utf-8");
-
-  // Check if this is raw proto content (for testing) or a file list
-  let protoContents: string[] = [];
-  let outputDir = ".";
-
-  // Try to parse as JSON config first
-  try {
-    const config = JSON.parse(inputStr);
-    if (config.files && Array.isArray(config.files)) {
-      protoContents = config.files;
-    }
-    if (config.outputDir) {
-      outputDir = config.outputDir;
-    }
-  } catch {
-    // If not JSON, treat as raw proto content
-    protoContents = [inputStr];
-  }
-
-  // Parse all proto content
-  const allServices: ParsedService[] = [];
-  for (const content of protoContents) {
-    const services = parseProtoFile(content);
-    allServices.push(...services);
-  }
-
-  // Generate output
-  const restAdapterContent = generateRestAdapter(allServices);
-
-  // Output as JSON response
-  const response = {
-    files: [
-      {
-        name: "rest-adapter.ts",
-        content: restAdapterContent,
-      },
-    ],
-    services: allServices.map((s) => s.fullName),
-    methodCount: allServices.reduce((sum, s) => sum + s.methods.length, 0),
-  };
-
-  process.stdout.write(JSON.stringify(response, null, 2));
+interface ParsedArgs {
+  local: boolean;
+  help: boolean;
+  protoDir: string;
+  outputDir: string;
 }
 
 /**
- * Main entry point
+ * Parse CLI arguments into a structured form.
+ * Flags: --local/-l, --out/-o <dir>, --help/-h
+ * The first positional argument is used as the proto directory.
  */
-async function main(): Promise<void> {
-  const args = process.argv.slice(2);
+function parseArgs(args: string[]): ParsedArgs {
+  const result: ParsedArgs = {
+    local: false,
+    help: false,
+    protoDir: "./proto",
+    outputDir: "./generated",
+  };
 
-  // Check for local mode
-  if (args.includes("--local") || args.includes("-l")) {
-    const protoDir = args.find((a) => !a.startsWith("-")) || "./proto";
-    const outIndex =
-      args.indexOf("--out") !== -1 ? args.indexOf("--out") : args.indexOf("-o");
-    const outputDir =
-      outIndex !== -1 && args[outIndex + 1]
-        ? args[outIndex + 1]
-        : "./generated";
-
-    await processLocalProtoFiles(protoDir, outputDir);
-    return;
+  const positional: string[] = [];
+  let i = 0;
+  while (i < args.length) {
+    const a = args[i];
+    if (a === "--local" || a === "-l") {
+      result.local = true;
+      i++;
+    } else if (a === "--out" || a === "-o") {
+      const value = args[i + 1];
+      if (value && !value.startsWith("-")) {
+        result.outputDir = value;
+        i += 2;
+      } else {
+        i++; // ignore flag without value
+      }
+    } else if (a === "--help" || a === "-h") {
+      result.help = true;
+      i++;
+    } else if (a.startsWith("-")) {
+      // Unknown flag — ignore
+      i++;
+    } else {
+      positional.push(a);
+      i++;
+    }
   }
 
-  // Check if stdin has data (piped input)
-  if (!process.stdin.isTTY) {
-    await handleBufPlugin();
-    return;
+  if (positional.length > 0) {
+    result.protoDir = positional[0];
+  }
+  if (positional.length > 1) {
+    result.outputDir = positional[1];
   }
 
-  // Show help
-  console.log(`
+  return result;
+}
+
+const HELP_TEXT = `
 connect-rest-adapter - Generate REST adapter for Connect-RPC
 
 Usage:
   # Local mode - process proto files from a directory
   connect-rest-adapter --local [proto-dir] --out [output-dir]
 
-  # Buf plugin mode - pipe proto content
-  cat proto/user.proto | connect-rest-adapter
-
-  # With Buf
+  # Buf plugin mode - pipe CodeGeneratorRequest (binary) via stdin
   buf generate
 
 Options:
@@ -179,8 +152,34 @@ Options:
 
 Examples:
   connect-rest-adapter --local ./proto --out ./src/generated
-  echo "syntax = \\"proto3\\"; ..." | connect-rest-adapter
-`);
+  connect-rest-adapter --local ./proto -o ./src/generated
+`;
+
+/**
+ * Main entry point
+ */
+async function main(): Promise<void> {
+  const args = parseArgs(process.argv.slice(2));
+
+  if (args.help) {
+    console.log(HELP_TEXT);
+    return;
+  }
+
+  // Check for local mode
+  if (args.local) {
+    await processLocalProtoFiles(args.protoDir, args.outputDir);
+    return;
+  }
+
+  // Check if stdin has data (piped input)
+  if (!process.stdin.isTTY) {
+    handleBufPlugin();
+    return;
+  }
+
+  // Show help
+  console.log(HELP_TEXT);
 }
 
 main().catch((err) => {

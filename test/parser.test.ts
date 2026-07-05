@@ -172,6 +172,84 @@ describe("Proto Parser", () => {
       expect(services[0].methods).toHaveLength(1);
       expect(services[0].methods[0].name).toBe("WithHttp");
     });
+
+    it("should parse methods with stream keyword", () => {
+      const proto = `
+        syntax = "proto3";
+        package api.v1;
+
+        service ChatService {
+          rpc Chat(stream ChatRequest) returns (stream ChatResponse) {
+            option (google.api.http) = { post: "/chat" };
+          };
+
+          rpc Subscribe(SubscriptionRequest) returns (stream Event) {
+            option (google.api.http) = { get: "/events" };
+          };
+        }
+      `;
+
+      const services = parseProtoFile(proto);
+
+      expect(services).toHaveLength(1);
+      expect(services[0].methods).toHaveLength(2);
+      expect(services[0].methods[0].name).toBe("Chat");
+      expect(services[0].methods[0].inputType).toBe("ChatRequest");
+      expect(services[0].methods[0].outputType).toBe("ChatResponse");
+      expect(services[0].methods[1].httpMethod).toBe("GET");
+    });
+
+    it("should ignore braces inside comments", () => {
+      const proto = `
+        syntax = "proto3";
+        package api.v1;
+
+        // Service with a { brace in a line comment
+        /* block comment with } unmatched brace */
+        service CommentedService {
+          // method { with } braces
+          rpc Hello(Req) returns (Res) {
+            /* annotation { } */
+            option (google.api.http) = { get: "/hello" };
+          };
+        }
+      `;
+
+      const services = parseProtoFile(proto);
+
+      expect(services).toHaveLength(1);
+      expect(services[0].serviceName).toBe("CommentedService");
+      expect(services[0].methods).toHaveLength(1);
+      expect(services[0].methods[0].httpPath).toBe("/hello");
+    });
+
+    it("should use primary binding over additional_bindings", () => {
+      const proto = `
+        syntax = "proto3";
+        package api.v1;
+
+        service MultiService {
+          rpc GetThing(Req) returns (Res) {
+            option (google.api.http) = {
+              get: "/v1/things/{thing_id}"
+              additional_bindings {
+                post: "/v1/things"
+                body: "*"
+              }
+            };
+          };
+        }
+      `;
+
+      const services = parseProtoFile(proto);
+
+      expect(services).toHaveLength(1);
+      const method = services[0].methods[0];
+      expect(method.httpMethod).toBe("GET");
+      expect(method.httpPath).toBe("/v1/things/{thing_id}");
+      // additional_bindings body should NOT leak into the primary binding
+      expect(method.body).toBeUndefined();
+    });
   });
 
   describe("getConnectPath", () => {

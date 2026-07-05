@@ -128,13 +128,30 @@ export function restAdapter(options?: RestAdapterOptions): typeof globalThis.fet
     if (!mapping) return globalThis.fetch(input, init);
 
     let bodyObj: Record<string, unknown> = {};
-    if (init?.body) {
+    let bodyText: string | null = null;
+    if (init?.body != null) {
+      if (init.body instanceof Uint8Array || init.body instanceof ArrayBuffer) {
+        bodyText = new TextDecoder().decode(init.body);
+      } else {
+        bodyText = String(init.body);
+      }
+    } else if (
+      typeof input === "object" &&
+      input !== null &&
+      !(input instanceof URL) &&
+      typeof (input as Request).body !== "undefined" &&
+      (input as Request).body != null
+    ) {
+      // body lives on the Request object — clone so the original stays usable
       try {
-        const raw =
-          init.body instanceof Uint8Array || init.body instanceof ArrayBuffer
-            ? new TextDecoder().decode(init.body)
-            : String(init.body);
-        bodyObj = JSON.parse(raw);
+        bodyText = await (input as Request).clone().text();
+      } catch {
+        bodyText = null;
+      }
+    }
+    if (bodyText) {
+      try {
+        bodyObj = JSON.parse(bodyText);
       } catch {
         return globalThis.fetch(input, init);
       }
@@ -157,6 +174,7 @@ export function restAdapter(options?: RestAdapterOptions): typeof globalThis.fet
     const headers = new Headers(init?.headers);
     headers.delete("Connect-Protocol-Version");
     headers.set("Content-Type", "application/json");
+    headers.set("Accept", "application/json");
     const newInit: RequestInit = { ...init, method, headers };
 
     if (method === "GET" || method === "DELETE") {
