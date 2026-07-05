@@ -64,6 +64,7 @@ version: v2
 plugins:
   - local: protoc-gen-connect-rest-adapter-es
     out: gen
+    opt: target=ts
 inputs:
   - directory: proto
 ```
@@ -71,6 +72,9 @@ inputs:
 ```bash
 buf generate
 ```
+
+> The `target=ts` option makes the plugin emit TypeScript (`.ts`). Without it,
+> the plugin defaults to JavaScript + declaration files (`.js` + `.d.ts`).
 
 ### 3. Use in your client
 
@@ -120,25 +124,35 @@ const response = await client.getUser({ userId: "123" });
 ## CLI Options
 
 ```bash
-# Local mode
+# Local mode - parse proto files from a directory
 connect-rest-adapter --local [proto-dir] --out [output-dir]
 
-# Pipe mode
-cat proto/user.proto | connect-rest-adapter
+# Buf plugin mode - invoked by `buf generate` (binary CodeGeneratorRequest on stdin)
+buf generate
 ```
 
-| Option          | Description       | Default       |
-| --------------- | ----------------- | ------------- |
-| `--local`, `-l` | Enable local mode | -             |
-| `--out`, `-o`   | Output directory  | `./generated` |
+| Option          | Description                              | Default       |
+| ---------------- | ---------------------------------------- | ------------- |
+| `--local`, `-l` | Enable local mode (parse proto sources)  | -             |
+| `--out`, `-o`   | Output directory (local mode only)       | `./generated` |
+| `--help`, `-h`   | Show help message                        | -             |
+
+> Without `--local`, the binary reads a protobuf `CodeGeneratorRequest` from
+> stdin (the standard protoc/buf plugin protocol). Piping raw `.proto` text
+> directly is **not** supported.
 
 ## Features
 
-- ✅ Zero runtime dependencies
-- ✅ Supports GET, POST, PUT, PATCH, DELETE
-- ✅ Handles nested path variables
+- ✅ Real Buf plugin protocol via `@bufbuild/protoplugin`
+- ✅ Reads `google.api.http` from method descriptors (not regex parsing)
+- ✅ Supports GET, POST, PUT, PATCH, DELETE (incl. `custom` pattern)
+- ✅ Handles `stream` RPC methods
+- ✅ Comment-safe parsing (braces in comments don't break extraction)
+- ✅ Handles `additional_bindings` (uses the primary binding)
+- ✅ Handles nested path variables (e.g. `/v1/users/{user_id}/posts/{post_id}`)
+- ✅ Configurable query param format (`camelCase` or `snake_case`)
 - ✅ Full TypeScript support
-- ✅ Works with Buf and standalone
+- ✅ Works with Buf (`buf generate`) and standalone (`--local`)
 
 ## License
 
