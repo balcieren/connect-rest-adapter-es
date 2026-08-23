@@ -1,6 +1,6 @@
 {
   "name": "connect-rest-adapter",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Buf plugin that generates a REST adapter for Connect-RPC clients, rewriting URLs using google.api.http annotations",
   "author": "Eren Balci",
   "license": "MIT",
