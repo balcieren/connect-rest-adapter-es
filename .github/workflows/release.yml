@@ -15,7 +15,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
           cache: "npm"
 
       - name: Install dependencies
@@ -43,7 +43,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
           registry-url: "https://registry.npmjs.org"
           cache: "npm"
 
@@ -62,7 +62,9 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add package.json package-lock.json
           git commit -m "chore: bump version to ${{ github.event.release.tag_name }} [skip ci]" || echo "No changes to commit"
-          git push origin HEAD:${{ github.event.release.target_commitish }}
+          # On a re-run the bump is already on the branch (which has moved
+          # on), so a rejected push must not stop the publish below.
+          git push origin HEAD:${{ github.event.release.target_commitish }} || echo "Version bump already on ${{ github.event.release.target_commitish }}"
 
       - name: Publish to NPM
         run: npm publish --access public
