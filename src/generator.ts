@@ -116,7 +116,12 @@ function flattenToParams(
 export function restAdapter(options?: RestAdapterOptions): typeof globalThis.fetch {
   const queryParamFormat = options?.queryParamFormat ?? "camelCase";
 
-  return async (input, init) => {
+  // Typed by hand and cast: some runtimes' fetch type carries extra members
+  // (Bun's has fetch.preconnect) that a plain function cannot satisfy.
+  const adapter = async (
+    input: RequestInfo | URL,
+    init?: RequestInit,
+  ): Promise<Response> => {
     const url =
       typeof input === "string"
         ? new URL(input)
@@ -192,6 +197,7 @@ export function restAdapter(options?: RestAdapterOptions): typeof globalThis.fet
 
     return globalThis.fetch(newUrl.toString(), newInit);
   };
+  return adapter as typeof globalThis.fetch;
 }
 `;
 }

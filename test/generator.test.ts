@@ -107,6 +107,10 @@ describe("Code Generator", () => {
     it("should accept options parameter", () => {
       const result = generateRestAdapter(mockServices);
       expect(result).toContain("restAdapter(options?: RestAdapterOptions)");
+      // The closure is typed by hand and cast, so runtimes whose fetch type
+      // has extra members (Bun: fetch.preconnect) accept it.
+      expect(result).toContain("input: RequestInfo | URL");
+      expect(result).toContain("return adapter as typeof globalThis.fetch;");
     });
 
     it("should remove Connect-Protocol-Version header", () => {

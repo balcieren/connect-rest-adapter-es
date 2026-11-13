@@ -65,6 +65,7 @@ plugins:
   - local: protoc-gen-connect-rest-adapter-es
     out: gen
     opt: target=ts
+    strategy: all
 inputs:
   - directory: proto
 ```
@@ -75,6 +76,13 @@ buf generate
 
 > The `target=ts` option makes the plugin emit TypeScript (`.ts`). Without it,
 > the plugin defaults to JavaScript + declaration files (`.js` + `.d.ts`).
+
+> **`strategy: all` matters when your protos span several packages.** The
+> plugin writes a single `rest-adapter.ts` for every service it sees. By
+> default Buf runs a plugin once per directory, so each run would write that
+> same file with only its own package's services; Buf keeps the first and
+> drops the rest ("duplicate generated file name"), leaving most RPCs on
+> their Connect paths. `strategy: all` runs it once over every file.
 
 ### 3. Use in your client
 
